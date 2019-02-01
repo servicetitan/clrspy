@@ -15,10 +15,10 @@ namespace ClrSpy
     {
         public Func<DateTimeOffset> DatetimeAccessor { get; set; }
         public CronExpression Schedule { get; set; }
-        public int Pid { get; set; }
+        public ClrRuntime Runtime { get; set; }
         public string OutputFilenameTemplate { get; set; }
         public int PrintDiffLimit { get; set; }
-        public List<int> GcGenToCollect{ get; set; }
+        public bool[] GcGenToCollect { get; } = new bool[3];
     }
     public class ClrSpy
     {
@@ -48,7 +48,7 @@ namespace ClrSpy
                     }
                     return;
                 }
-                
+
                 while (!_stopCancellationTokenSource.Token.IsCancellationRequested)
                 {
                     var timeSnapshot = _configuration.DatetimeAccessor();
@@ -85,15 +85,14 @@ namespace ClrSpy
         private async ValueTask ProcessHeapAsync(DateTimeOffset timeSnapshot)
         {
             await Task.Yield();
-            using (var dataTarget = DataTarget.AttachToProcess(_configuration.Pid, 5000, AttachFlag.NonInvasive))
             {
 
-                var runtime = dataTarget.ClrVersions[0].CreateRuntime();
+                var runtime = _configuration.Runtime;
                 var heap = runtime.Heap;
 
                 // GC heap traverse isn't thread safe, as I founded (?)
                 var results = new Dictionary<(string TypeName, int Gen), int>(16_000);
-                
+
                 foreach (var addr in heap.EnumerateObjectAddresses())
                 {
                     try
@@ -108,7 +107,7 @@ namespace ClrSpy
 
                         int gen = heap.GetGeneration(addr);
 
-                        if (!_configuration.GcGenToCollect.Contains(gen))
+                        if (!_configuration.GcGenToCollect[gen])
                             continue;
 
                         results[(type.Name, gen)] = results.TryGetValue((type.Name, gen), out int count) ? ++count : 1;
@@ -179,7 +178,7 @@ namespace ClrSpy
             WriteColored("| {0,-88}|", ConsoleColor.Yellow, "Type name");
             WriteColored("Gen", ConsoleColor.Yellow);
             WriteColored("|    Count|\r\n", ConsoleColor.Yellow);
-            
+
 
 
             foreach (var d in diffToPrint)
@@ -232,5 +231,5 @@ namespace ClrSpy
 
     }
 
-    
+
 }
