@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 15
-VisualStudioVersion = 15.0.26124.0
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.28527.54
 MinimumVisualStudioVersion = 15.0.26124.0
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{002EF252-4375-4EF8-A3B1-4CF69320B9C4}"
 EndProject
@@ -52,7 +52,6 @@ Global
 		{D31E2404-7E54-437F-8C2D-5F52DA043584}.Release|x86.ActiveCfg = Release|Any CPU
 		{D31E2404-7E54-437F-8C2D-5F52DA043584}.Release|x86.Build.0 = Release|Any CPU
 		{CBAF655A-FD2A-44C6-9D24-FA9AC7829F98}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{CBAF655A-FD2A-44C6-9D24-FA9AC7829F98}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{CBAF655A-FD2A-44C6-9D24-FA9AC7829F98}.Debug|x64.ActiveCfg = Debug|Any CPU
 		{CBAF655A-FD2A-44C6-9D24-FA9AC7829F98}.Debug|x64.Build.0 = Debug|Any CPU
 		{CBAF655A-FD2A-44C6-9D24-FA9AC7829F98}.Debug|x86.ActiveCfg = Debug|Any CPU

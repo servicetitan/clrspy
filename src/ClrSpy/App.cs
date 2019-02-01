@@ -10,17 +10,45 @@ using System.Threading.Tasks;
 using Cronos;
 using McMaster.Extensions.CommandLineUtils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Diagnostics.Runtime;
 using Serilog;
 
 
 namespace ClrSpy
 {
+    [Command(Name = "ClrSpy", Description = "CLR Monitoring Tool"), Subcommand(typeof(ParallelStacks))]
     public class App
     {
+        private static TimeSpan Timeout = TimeSpan.FromSeconds(5);
+
         public static Task<int> Main(string[] args) => CommandLineApplication.ExecuteAsync<App>(args);
 
+        private static ClrRuntime GetTargetRuntime(string target)
+        {
+            DataTarget dataTarget = null;
+            if (Path.GetExtension(target).ToUpper() == "DMP")
+                dataTarget = DataTarget.LoadCoreDump(target);
+            else {
+                int pid = int.TryParse(target, out var a) ? a : (Process.GetProcessesByName(target).FirstOrDefault()?.Id ?? throw new Exception($"Process '{ProcessName}' not found"));
+                dataTarget = DataTarget.AttachToProcess(pid, (uint)Timeout.TotalMilliseconds, AttachFlag.NonInvasive);
+            }
+            return dataTarget.ClrVersions[0].CreateRuntime();
+        }
 
-        [Required]
+        [Command("parallel-stacks", Description = "Shows parallel stacks")]
+        public class ParallelStacks
+        {
+            [Argument(0, Description = "Process or dump")]
+            private string Target { get; }
+
+            private void OnExecute(IConsole console)
+            {
+                var runtime = GetTargetRuntime(Target);
+                var stacks = CallStacks.GetStackTrances(runtime);
+                console.Out.WriteTree(Tree.MergeChains(stacks));
+            }
+        }
+
         [Option(Description = "Observable process", LongName = "process", ShortName = "p", ShowInHelpText = true)]
         public string ProcessName { get; set; }
 
@@ -56,7 +84,6 @@ namespace ClrSpy
             using (var serviceProvider = serviceCollection.BuildServiceProvider())
             using (var scope = serviceProvider.CreateScope())
             {
-
                 var pid = Process.GetProcessesByName(ProcessName).FirstOrDefault()?.Id;
                 if (pid == null)
                 {

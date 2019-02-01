@@ -11,10 +11,10 @@ root = true
 # All Files
 [*]
 charset = utf-8
-end_of_line = crlf
+end_of_line = lf
 indent_style = space
 indent_size = 4
-insert_final_newline = false
+insert_final_newline = true
 trim_trailing_whitespace = true
 
 
@@ -148,7 +148,7 @@ csharp_prefer_braces = true:silent
 dotnet_sort_system_directives_first = true
 # C# formatting settings
 # https://docs.microsoft.com/en-us/visualstudio/ide/editorconfig-code-style-settings-reference#c-formatting-settings
-csharp_new_line_before_open_brace = types,local_functions,indexers,methods,control_blocks,events
+csharp_new_line_before_open_brace = types,methods,local_functions
 csharp_new_line_before_else = true
 csharp_new_line_before_catch = true
 csharp_new_line_before_finally = true
