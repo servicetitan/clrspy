@@ -6,6 +6,9 @@
     <OutputPath>$(SolutionDir)artifacts\bin</OutputPath>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <ApplicationIcon>$(SolutionDir)docs\img\icon.ico</ApplicationIcon>
+    <LangVersion>8.0</LangVersion>
+    <NullableReferenceTypes>true</NullableReferenceTypes>
+    <SuppressNETCoreSdkPreviewMessage>true</SuppressNETCoreSdkPreviewMessage>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Nerdbank.GitVersioning" Version="2.2.13" PrivateAssets="All" />
