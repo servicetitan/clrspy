@@ -22,7 +22,9 @@ namespace ClrSpy
                 Node last = r.Count == 0 ? null : r.Last();
                 if (last?.Name == node.Name) {
                     last.Objects = last.Objects.Concat(node.Objects).ToList();
-                    last.Children = last.Children.Concat(node.Children).ToList();
+                    if (last.Children != null || node.Children != null) {
+                        last.Children = MergeTrees((last.Children ?? new List<Node>()).Concat(node.Children ?? new List<Node>()));
+                    }
                 }
                 else {
                     if (last?.Children.Count > 1) {
@@ -53,22 +55,42 @@ namespace ClrSpy
             return MergeTrees(tree);
         }
 
-        public static void WriteTree(this TextWriter w, List<Node> tree, List<bool> parentLines = null)
+        public static void WriteTree(this TextWriter w, List<Node> tree) => WriteTree(w, tree, new List<bool>());
+
+        private static void WriteTree(this TextWriter w, List<Node> tree, List<bool> parentLines)
         {
             for (int i = 0; i < tree.Count; ++i) {
                 var node = tree[i];
-                var isLast = i == tree.Count - 1;
-                if (parentLines != null) {
-                    foreach (var v in parentLines)
+                bool isLast = i == tree.Count - 1;
+                bool isSimpleChain = false;
+                for (List<Node> children; ; node = children[0]) {
+                    foreach (var v in parentLines) {
                         Console.Write(v ? "│ " : "  ");
-                }
-                Console.Write(isLast ? "┕" : "├");
-                if (node.Weight > 1)
-                    Console.Write($"{node.Weight} ");
-                if (node.Children != null) {
-                    var childLines = parentLines.ToList();
-                    childLines.Add(!isLast);
-                    w.WriteTree(node.Children, childLines);
+                    }
+                    if (parentLines.Count > 0) {
+                        Console.Write(isSimpleChain
+                            ? (isLast ? " " : "│")
+                            : isLast ? "└" : "├");
+                    }
+                    Console.Write(node.Name);
+                    children = node.Children;
+                    if (!isSimpleChain && node.Weight > 1)
+                        Console.Write($" - {node.Weight} threads");
+                    Console.WriteLine();
+                    if (children?.Count != 1) {
+                        if (children != null) {
+                            var childLines = parentLines.ToList();
+                            childLines.Add(!isLast);
+                            w.WriteTree(children, childLines);
+                        }
+                        if (isSimpleChain) {
+                            foreach (var v in parentLines)
+                                Console.Write(v ? "│ " : "  ");
+                            Console.WriteLine(isLast ? " " : "│");
+                        }
+                        break;
+                    }
+                    isSimpleChain = true;
                 }
             }
         }

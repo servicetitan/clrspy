@@ -11,55 +11,57 @@ using Microsoft.Extensions.Logging;
 
 namespace ClrSpy
 {
+    using ResultsDictionary = Dictionary<(string TypeName, int Gen), uint>;
+
     public class ClrSpyConfiguration
     {
+        public const int MaxGenerations = 5;
+
         public Func<DateTimeOffset> DatetimeAccessor { get; set; }
         public CronExpression Schedule { get; set; }
-        public int Pid { get; set; }
+        public ClrRuntime Runtime { get; set; }
         public string OutputFilenameTemplate { get; set; }
         public int PrintDiffLimit { get; set; }
-        public List<int> GcGenToCollect{ get; set; }
+        public bool[] GcGenToCollect { get; } = new bool[MaxGenerations];
     }
+
     public class ClrSpy
     {
         private CancellationTokenSource _stopCancellationTokenSource;
         private ClrSpyConfiguration _configuration;
         private readonly ILogger<ClrSpy> _logger;
-        private Dictionary<(string TypeName, int Gen), int> _prevResults;
+        private ResultsDictionary _prevResults;
 
         public ClrSpy(ClrSpyConfiguration configuration, ILogger<ClrSpy> logger)
         {
             _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _prevResults = new Dictionary<(string TypeName, int Gen), int>();
+            _prevResults = new ResultsDictionary();
         }
 
         public Task StartAsync(CancellationToken? cancellationToken = null)
         {
-            _stopCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken ?? new CancellationToken());
+            var stopToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken ?? new CancellationToken()).Token;
             return Task.Factory.StartNew(async () => {
 
                 var prevRun = _configuration.DatetimeAccessor();
-                if(_configuration.Schedule is null)
-                {
-                    using (_logger.BeginScope("Processing heap"))
-                    {
+                if (_configuration.Schedule is null) {
+                    using (_logger.BeginScope("Processing heap")) {
                         await ProcessHeapAsync(prevRun).ConfigureAwait(false);
                     }
                     return;
                 }
-                
-                while (!_stopCancellationTokenSource.Token.IsCancellationRequested)
-                {
+
+                // Task.Delay use Timer + create memory traffic, so we just block thread via CT
+                // See https://referencesource.microsoft.com/#mscorlib/system/threading/Tasks/Task.cs,5896
+                while (!_stopCancellationTokenSource.Token.WaitHandle.WaitOne(1000)) {
                     var timeSnapshot = _configuration.DatetimeAccessor();
                     var currentRun = _configuration.Schedule.GetNextOccurrence(prevRun,
                         TimeZoneInfo.Local,
                         inclusive: false);
 
-                    if (currentRun.Value < timeSnapshot)
-                    {
-                        using (_logger.BeginScope("Processing heap"))
-                        {
+                    if (currentRun.Value < timeSnapshot) {
+                        using (_logger.BeginScope("Processing heap")) {
                             _logger.LogDebug("Run processing, time triggered {CurrentRun}. Next processing time: {NextRun}",
                                 currentRun,
                                 _configuration.Schedule.GetNextOccurrence(timeSnapshot,
@@ -69,15 +71,11 @@ namespace ClrSpy
                             await ProcessHeapAsync(timeSnapshot).ConfigureAwait(false);
 
                             _logger.LogDebug("End processing, for time triggered {CurrentRun}", currentRun);
-
                         }
                     }
 
                     // we don't want miss any run
                     prevRun = timeSnapshot;
-                    // Task.Delay use Timer + create memory traffic, so we just block thread via CT
-                    // See https://referencesource.microsoft.com/#mscorlib/system/threading/Tasks/Task.cs,5896
-                    _stopCancellationTokenSource.Token.WaitHandle.WaitOne(1000);
                 }
             }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default).Unwrap();
         }
@@ -85,64 +83,48 @@ namespace ClrSpy
         private async ValueTask ProcessHeapAsync(DateTimeOffset timeSnapshot)
         {
             await Task.Yield();
-            using (var dataTarget = DataTarget.AttachToProcess(_configuration.Pid, 5000, AttachFlag.NonInvasive))
-            {
 
-                var runtime = dataTarget.ClrVersions[0].CreateRuntime();
-                var heap = runtime.Heap;
+            var runtime = _configuration.Runtime;
+            var gcGenToCollect = _configuration.GcGenToCollect;
+            var heap = runtime.Heap;
 
-                // GC heap traverse isn't thread safe, as I founded (?)
-                var results = new Dictionary<(string TypeName, int Gen), int>(16_000);
-                
-                foreach (var addr in heap.EnumerateObjectAddresses())
-                {
-                    try
-                    {
-                        if (addr == 0)
-                            continue;
+            // GC heap traverse isn't thread safe, as I found (?)
+            var results = new ResultsDictionary(16_000);
 
-                        var type = heap.GetObjectType(addr);
-
-                        if (string.IsNullOrEmpty(type?.Name) || type.Name == "Free")
-                            continue;
-
+            foreach (var addr in heap.EnumerateObjectAddresses().Where(a => a != 0)) {
+                try {
+                    var typeName = heap.GetObjectType(addr)?.Name;
+                    if (!string.IsNullOrEmpty(typeName) && typeName != "Free") {
                         int gen = heap.GetGeneration(addr);
-
-                        if (!_configuration.GcGenToCollect.Contains(gen))
-                            continue;
-
-                        results[(type.Name, gen)] = results.TryGetValue((type.Name, gen), out int count) ? ++count : 1;
-                    }
-                    catch(Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Address '{Address}' can't be readed", addr);
+                        if (gcGenToCollect[gen]) {
+                            var key = (typeName, gen);
+                            results[key] = results.TryGetValue(key, out var count) ? count + 1 : 1;
+                        }
                     }
                 }
-                var printDiffTask = _configuration.PrintDiffLimit >= 0
-                    ? PrintDiffAsync(results)
-                    : new ValueTask();
-
-                if (!string.IsNullOrWhiteSpace(_configuration.OutputFilenameTemplate))
-                {
-                    await WriteOutputFileAsync(timeSnapshot, results).ConfigureAwait(false);
+                catch (Exception ex) {
+                    _logger.LogWarning(ex, "Address '{Address}' can't be readed", addr);
                 }
-                await printDiffTask.ConfigureAwait(false);
-                _prevResults.Clear();
-                _prevResults = results;
-
             }
+            var printDiffTask = _configuration.PrintDiffLimit >= 0
+                ? PrintDiffAsync(results)
+                : new ValueTask();
+
+            if (!string.IsNullOrWhiteSpace(_configuration.OutputFilenameTemplate)) {
+                await WriteOutputFileAsync(timeSnapshot, results).ConfigureAwait(false);
+            }
+            await printDiffTask.ConfigureAwait(false);
+            Std.Exchange(ref _prevResults, results).Clear();
         }
 
-        private async Task WriteOutputFileAsync(DateTimeOffset timeSnapshot, Dictionary<(string TypeName, int Gen), int> results)
+        private async Task WriteOutputFileAsync(DateTimeOffset timeSnapshot, ResultsDictionary results)
         {
             var sb = StringBuilderCache.Get(1024);
             var datetimeString = timeSnapshot.ToString("s");
             using (var fs = GetOutputStream(timeSnapshot))
-            using (var textStream = new StreamWriter(fs, Encoding.UTF8))
-            {
+            using (var textStream = new StreamWriter(fs, Encoding.UTF8)) {
                 var list = results.ToList().OrderByDescending(kv => kv.Value).ToList();
-                foreach (var kv in list)
-                {
+                foreach (var kv in list) {
                     sb.Length = 0;
 
                     sb.Append(datetimeString).Append("\t")
@@ -161,7 +143,7 @@ namespace ClrSpy
         }
 
         // ToDo: optimize this
-        private async ValueTask PrintDiffAsync(Dictionary<(string TypeName, int Gen), int> next)
+        private async ValueTask PrintDiffAsync(ResultsDictionary next)
         {
             await Task.Yield();
             var diff = DictionaryDiffComparer.GetDiff(_prevResults, next);
@@ -169,38 +151,42 @@ namespace ClrSpy
                 .Where(d => d.Abs > 0)
                 .OrderByDescending(d => d.Abs);
 
-            var diffToPrint = (_configuration.PrintDiffLimit > 0
-                ? enumerable.Take(_configuration.PrintDiffLimit)
-                : enumerable).ToList();
+            var diffToPrint = (_configuration.PrintDiffLimit > 0 ? enumerable.Take(_configuration.PrintDiffLimit) : enumerable)
+                .ToList();
 
             if (diffToPrint.Count <= 0)
                 return;
 
-            WriteColored("| {0,-88}|", ConsoleColor.Yellow, "Type name");
-            WriteColored("Gen", ConsoleColor.Yellow);
-            WriteColored("|    Count|\r\n", ConsoleColor.Yellow);
-            
+            using (new Foreground(ConsoleColor.Yellow)) {
+                Console.Write("| {0,-88}|", "Type name");
+                Console.Write("Gen");
+                Console.WriteLine("|    Count|");
 
+                foreach (var d in diffToPrint) {
+                    Console.Write("| ");
+                    using (new Foreground(ConsoleColor.Gray)) {
+                        Console.Write("{0,-88}", d.Diff.Key.TypeName.Length <= 88
+                            ? d.Diff.Key.TypeName
+                            : d.Diff.Key.TypeName.Substring(0, 85) + "...");
+                    }
 
-            foreach (var d in diffToPrint)
-            {
-                WriteColored("| ", ConsoleColor.Yellow);
-                WriteColored("{0,-88}", ConsoleColor.Gray, d.Diff.Key.TypeName.Length <= 88
-                    ? d.Diff.Key.TypeName
-                    : d.Diff.Key.TypeName.Substring(0,85) + "...");
-                WriteColored("|", ConsoleColor.Yellow);
-                WriteColored(" {0} ", ConsoleColor.DarkBlue, d.Diff.Key.Gen);
-                WriteColored("|", ConsoleColor.Yellow);
-                var sub = d.Diff.NextValue - d.Diff.PrevValue;
-                if (sub > 0)
-                    WriteColored(" ↑{0,7:n0}", ConsoleColor.Green, d.Abs);
-                else if(sub < 0)
-                    WriteColored(" ↓{0,7:n0}", ConsoleColor.Red, d.Abs);
-                else
-                    WriteColored(" {0,8:n0}", ConsoleColor.Gray, 0);
-                WriteColored("|\r\n", ConsoleColor.Yellow);
+                    Console.Write("|");
+                    using (new Foreground(ConsoleColor.DarkBlue)) {
+                        Console.Write($" {d.Diff.Key.Gen} ");
+                    }
 
-
+                    Console.Write("|");
+                    var sub = d.Diff.NextValue - d.Diff.PrevValue;
+                    if (sub == 0)
+                        using (new Foreground(ConsoleColor.Gray)) {
+                            Console.Write(" {0,8:n0}", 0);
+                        }
+                    else
+                        using (new Foreground(sub > 0 ? ConsoleColor.Green : ConsoleColor.Red)) {
+                            Console.Write($" {(sub > 0 ? "↑" : "↓")}{d.Abs,7:n0}");
+                        }
+                    Console.WriteLine("|");
+                }
             }
         }
         private Stream GetOutputStream(DateTimeOffset timeSnapshot)
@@ -217,20 +203,11 @@ namespace ClrSpy
             var path = _configuration.OutputFilenameTemplate.Replace("{DateTime}",
                 string.Join(replacement, timeSnapshot.ToString("s").Split(Path.GetInvalidFileNameChars())));
 
-            var dirPath = Path.GetDirectoryName(path);
-            if (!Directory.Exists(dirPath))
-                Directory.CreateDirectory(dirPath);
+            Directory.CreateDirectory(Path.GetDirectoryName(path));
             return path;
-        }
-
-        private static void WriteColored(string format, ConsoleColor color, params object[] args)
-        {
-            Console.ForegroundColor = color;
-            Console.Write(format, args);
-            Console.ResetColor();
         }
 
     }
 
-    
+
 }
