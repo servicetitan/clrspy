@@ -17,7 +17,7 @@ namespace ClrSpy
             if (name == null) {
                 var method = Frame.Method;
                 if (method == null) {
-                    name = base.ToString();
+                    name = Frame.ToString();
                 }
                 else {
                     var typename = method.Type.Name;
