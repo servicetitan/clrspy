@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Collections.Generic;
 using Microsoft.Diagnostics.Runtime;
+using DynaMD;
 
 namespace ClrSpy
 {
@@ -17,48 +18,35 @@ namespace ClrSpy
 
         protected override IEnumerable<ulong> EnumerateThreadPoolWorkQueue(ulong workQueueRef)
         {
-            var typeQueue = heap.GetObjectType(workQueueRef);
-            var fieldTail = typeQueue.GetFieldByName("queueTail");
-            var tail = (ulong)fieldTail.GetValue(workQueueRef);
+            var queue = heap.GetProxy(workQueueRef);
+            var tail = queue.queueTail;
 
-            var typeSegment = heap.GetObjectType(tail);
-            var fieldNext = typeSegment.GetFieldByName("Next");
-            var fieldIndexes = typeSegment.GetFieldByName("indexes");
-            var fieldNodes = typeSegment.GetFieldByName("nodes");
-
-            for (; tail != 0; tail = (ulong)fieldNext.GetValue(tail)) {
-                var indexes = (int)fieldIndexes.GetValue(tail);
+            for (; tail != null; tail = tail.Next) {
+                var indexes = (int)tail.indexes;
                 var lower = indexes & 0xFFFF;
                 var upper = (indexes >> 16) & 0xFFFF;
-                var nodes = (ulong)fieldNodes.GetValue(tail);
-                var typeNodes = heap.GetObjectType(nodes);
+                var nodes = tail.nodes;
                 for (int i = lower; i < upper; ++i) {
-                    var node = (ulong)typeNodes.GetArrayElementValue(nodes, i);
-                    yield return node;
+                    var node = nodes[i];
+                    yield return (ulong)node;
                 }
             }
 
+            var typeQueue = heap.GetObjectType(workQueueRef);
             var fieldAllThreadQueues = typeQueue.GetStaticFieldByName("allThreadQueues");
-            var allThreadQueues = (ulong)fieldAllThreadQueues.GetValue(domain);
-            var typeSparseArray = heap.GetObjectType(allThreadQueues);
-            var fieldMArray = typeSparseArray.GetFieldByName("m_array");
-            var marray = (ulong)fieldMArray.GetValue(allThreadQueues);
-            var typeMArray = heap.GetObjectType(marray);
-            var marrayLen = typeMArray.GetArrayLength(marray);
+            var allThreadQueues = heap.GetProxy((ulong)fieldAllThreadQueues.GetValue(domain));
 
+            var marray = allThreadQueues.m_array;
+            int marrayLen = marray.Length;
             for (int i = 0; i < marrayLen; ++i) {
-                var workStealingQueue = (ulong)typeMArray.GetArrayElementValue(marray, i);
-                if (workStealingQueue != 0) {
-                    var typeWorkStealingQueue = heap.GetObjectType(workStealingQueue);
-                    var fieldSubArray = typeWorkStealingQueue.GetFieldByName("m_array");
-                    var subArray = (ulong)fieldSubArray.GetValue(workStealingQueue);
-                    var typeSubMArray = heap.GetObjectType(subArray);
-                    var subArrayLen = typeMArray.GetArrayLength(subArray);
-
+                var workStealingQueue = marray[i];
+                if (workStealingQueue != null) {
+                    var subArray = workStealingQueue.m_array;;
+                    var subArrayLen = subArray.Length;
                     for (int j = 0; j < subArrayLen; ++j) {
-                        var node = (ulong)typeSubMArray.GetArrayElementValue(subArray, j);
-                        if (node != 0) {
-                            yield return node;
+                        var node = subArray[j];
+                        if (node != null) {
+                            yield return (ulong)node;
                         }
                     }
                 }
@@ -79,7 +67,8 @@ namespace ClrSpy
                 var timeQueue = (ulong)fieldSQueue.GetValue(domain);
                 for (ulong timer = (ulong)fieldTimers.GetValue(timeQueue); timer != 0; timer = (ulong)fieldNext.GetValue(timer)) {
                     var state = (ulong)fieldState.GetValue(timer);
-                    yield return state;
+                    if (state != 0)
+                        yield return state;
                 }
             }
         }

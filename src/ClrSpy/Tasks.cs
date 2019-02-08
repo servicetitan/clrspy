@@ -17,9 +17,13 @@ namespace ClrSpy
 
         public IEnumerable<ThreadPoolItem> GetTasks()
         {
-            var workItems = clrDriver.EnumerateManagedWorkItems().ToArray(); //!!!T
+//            return stackTasks.Select(clrDriver.GetThreadPoolItem);
+
+            var workItems = clrDriver.EnumerateManagedWorkItems().ToArray(); //!!!
+            var stackTasks = clrDriver.EnumerateStackTasks().Take(10).ToArray(); //!!!
             var timerTasks = clrDriver.EnumerateTimerTasks();
-            return workItems.Concat(timerTasks).Select(clrDriver.GetThreadPoolItem);
+            return workItems.Concat(timerTasks).Concat(stackTasks)
+                .Select(clrDriver.GetThreadPoolItem);
         }
 
         public TasksSpy(ClrRuntime runtime) {

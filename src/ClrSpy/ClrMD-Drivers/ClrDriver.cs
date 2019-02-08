@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Collections.Generic;
 using Microsoft.Diagnostics.Runtime;
 
@@ -14,6 +15,7 @@ namespace ClrSpy
     {
         IEnumerable<ulong> EnumerateManagedWorkItems();
         IEnumerable<ulong> EnumerateTimerTasks();
+        IEnumerable<ulong> EnumerateStackTasks();
         ThreadPoolItem GetThreadPoolItem(ulong item);
     }
 
@@ -24,6 +26,22 @@ namespace ClrSpy
         protected readonly ClrAppDomain domain;
 
         protected abstract IEnumerable<ulong> EnumerateThreadPoolWorkQueue(ulong workQueueRef);
+
+        public IEnumerable<ulong> EnumerateStackTasks()
+        {
+            var set = new HashSet<ulong>();
+
+            foreach (var thread in runtime.Threads) {
+                foreach (var root in thread.EnumerateStackObjects().Where(o => o.Kind == GCRootKind.LocalVar)) {
+                    if (set.Add(root.Object)) {
+                        var type = heap.GetObjectType(root.Object);
+                        if (type.Name.Contains("System.Threading.Tasks.Task")) {
+                            yield return root.Object;
+                        }
+                    }
+                }
+            }
+        }
 
         public IEnumerable<ulong> EnumerateManagedWorkItems()
         {
@@ -148,12 +166,12 @@ namespace ClrSpy
                 case "System.Threading.QueueUserWorkItemCallback":
                     return GetQueueUserWorkItemCallback(item);
                 default:
-                    // create a raw information
-                    ThreadPoolItem tpi = new ThreadPoolItem() {
-                        Address = (ulong)item,
-                        MethodName = itemType.Name
-                    };
-                    return tpi;
+                    if (itemType.Name.StartsWith("System.Threading.Tasks.Task<")) {
+                        return GetTask(item);
+                    }
+                    else {
+                        return new ThreadPoolItem() { Address = item, MethodName = itemType.Name };
+                    }
             }
         }
 
