@@ -4,7 +4,6 @@
     <TargetFramework>netcoreapp3.0</TargetFramework>
     <OutputType>Exe</OutputType>
     <StartupObject />
-    <SuppressNETCoreSdkPreviewMessage>true</SuppressNETCoreSdkPreviewMessage>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
   </PropertyGroup>
 
