@@ -17,6 +17,11 @@ using Serilog;
 
 namespace ClrSpy
 {
+    public class FindProcessException : Exception
+    {
+        public FindProcessException(string m) : base(m) { }
+    }
+
     [Command(Name = "ClrSpy", Description = "CLR Monitoring Tool")]
     [Subcommand(typeof(ParallelStacks), typeof(Heap), typeof(TasksCommand))]
     public class App
@@ -63,7 +68,16 @@ namespace ClrSpy
                 dataTarget = DataTarget.LoadCoreDump(target);
             }
             else {
-                int pid = int.TryParse(target, out var a) ? a : (Process.GetProcessesByName(target).FirstOrDefault()?.Id ?? throw new Exception($"Process '{target}' not found"));
+                if (!int.TryParse(target, out var pid))
+                {
+                    var name = target.ToUpper();
+                    var basename = !name.EndsWith(".EXE") ? name : name.Substring(0, name.Length - 4);
+                    var processes = Process.GetProcesses().Where(o => o.ProcessName.ToUpper().Contains(basename)).ToArray();
+                    var proc = processes.Length == 0 ? throw new FindProcessException($"Process {target} not found")
+                        : processes.Length > 1 ? throw new FindProcessException($"Multiple processes match the specified name {target}")
+                        : processes[0];
+                    pid = proc.Id;
+                }
                 dataTarget = DataTarget.AttachToProcess(pid, (uint)Timeout.TotalMilliseconds, AttachFlag.NonInvasive);
             }
             return dataTarget.ClrVersions[0].CreateRuntime();
