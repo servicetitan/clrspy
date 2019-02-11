@@ -25,6 +25,9 @@ namespace ClrSpy
         protected readonly ClrHeap heap;
         protected readonly ClrAppDomain domain;
 
+        protected readonly ClrType typeTask, typeDelegate;
+        protected readonly ClrInstanceField fieldDelegateTarget, fieldTaskAction, fieldTaskScheduler;
+
         protected abstract IEnumerable<ulong> EnumerateThreadPoolWorkQueue(ulong workQueueRef);
 
         public IEnumerable<ulong> EnumerateStackTasks()
@@ -84,20 +87,11 @@ namespace ClrSpy
                 + $"{methodTypeName}.{method.Name}";
         }
 
-        protected virtual ulong GetTaskAction(ulong task)
-        {
-            var typeTask = heap.GetTypeByName("System.Threading.Tasks.Task");
-            var fieldTaskAction = typeTask.GetFieldByName("m_action");
-            return (ulong)fieldTaskAction.GetValue(task);
-        }
+        protected virtual ulong GetTaskAction(ulong task) =>
+            (ulong)fieldTaskAction.GetValue(task);
 
         protected string BuildMethodNameFromDelegate(ulong action, ulong task = 0)
         {
-            var typeTask = heap.GetTypeByName("System.Threading.Tasks.Task");
-            var fieldTaskScheduler = typeTask.GetFieldByName("m_taskScheduler");
-            var typeDelegate = heap.GetTypeByName("System.Delegate");
-            var fieldDelegateTarget = typeDelegate.GetFieldByName("_target");
-
             var r = " [no action]";
             if (action != 0) {
                 var target = (ulong)fieldDelegateTarget.GetValue(action);
@@ -188,8 +182,16 @@ namespace ClrSpy
             var target = fieldAction.GetValue(continuation);
         }*/
 
-        public ClrDriver(ClrRuntime runtime) =>
+        public ClrDriver(ClrRuntime runtime)
+        {
             (this.runtime, heap, domain) = (runtime, runtime.Heap, runtime.AppDomains[0]);
 
+            typeDelegate = heap.GetTypeByName("System.Delegate");
+            fieldDelegateTarget = typeDelegate.GetFieldByName("_target");
+
+            typeTask = heap.GetTypeByName("System.Threading.Tasks.Task");
+            fieldTaskAction = typeTask.GetFieldByName("m_action");
+            fieldTaskScheduler = typeTask.GetFieldByName("m_taskScheduler");
+        }
     }
 }
