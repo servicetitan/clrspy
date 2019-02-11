@@ -1,5 +1,5 @@
 {
-  "version": "0.1.0-beta",
+  "version": "0.2.0-beta",
   "scripts": {
     "install_tools": "npm install -g commitizen cz-conventional-changelog",
     "changelog": "conventional-changelog -p angular -i CHANGELOG.md --same-file"
