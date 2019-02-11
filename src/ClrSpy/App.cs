@@ -23,6 +23,11 @@ namespace ClrSpy
     {
         private static TimeSpan Timeout = TimeSpan.FromSeconds(5);
 
+        private void OnExecute(CommandLineApplication app)
+        {
+            app.ShowHelp();
+        }
+
         public static async Task<int> Main(string[] args)
         {
             if (Environment.OSVersion.Platform == PlatformID.Win32NT) {
