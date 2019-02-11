@@ -8,9 +8,9 @@ namespace ClrSpy
 {
     public class NetFrameworkClrDriver : ClrDriver
     {
-        protected readonly ClrType typeTimerQueue, typeTimerQueueTimer;
+        protected readonly ClrType typeTimerQueue, typeTimerQueueTimer, typeMoveNextRunner;
         protected readonly ClrStaticField fieldSQueue;
-        protected readonly ClrInstanceField fieldTimers, fieldNext, fieldState;
+        protected readonly ClrInstanceField fieldTimers, fieldNext, fieldState, fieldDelayPromiseContinuationObject, fieldStateMachine;
 
         protected override IEnumerable<ulong> EnumerateThreadPoolWorkQueue(ulong workQueueRef)
         {
@@ -55,8 +55,15 @@ namespace ClrSpy
                 var timeQueue = (ulong)fieldSQueue.GetValue(domain);
                 for (ulong timer = (ulong)fieldTimers.GetValue(timeQueue); timer != 0; timer = (ulong)fieldNext.GetValue(timer)) {
                     var state = (ulong)fieldState.GetValue(timer);
-                    if (state != 0)
-                        yield return state;
+                    if (state != 0) {
+                        var typeState = heap.GetObjectType(state);
+                        if (typeState == typeDelayPromise) {
+                            var continuation = (ulong)fieldDelayPromiseContinuationObject.GetValue(state);
+                            var target = (ulong)fieldDelegateTarget.GetValue(continuation);
+                            var stateMachine = (ulong)fieldStateMachine.GetValue(target);
+                            yield return stateMachine;
+                        }
+                    }
                 }
             }
         }
@@ -69,6 +76,9 @@ namespace ClrSpy
             typeTimerQueueTimer = heap.GetTypeByName("System.Threading.TimerQueueTimer");
             fieldNext = typeTimerQueueTimer.GetFieldByName("m_next");
             fieldState = typeTimerQueueTimer.GetFieldByName("m_state");
+            fieldDelayPromiseContinuationObject = typeDelayPromise.GetFieldByName("m_continuationObject");
+            typeMoveNextRunner = heap.GetTypeByName("System.Runtime.CompilerServices.AsyncMethodBuilderCore+MoveNextRunner");
+            fieldStateMachine = typeMoveNextRunner.GetFieldByName("m_stateMachine");
         }
     }
 }

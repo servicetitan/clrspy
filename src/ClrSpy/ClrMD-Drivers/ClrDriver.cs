@@ -25,7 +25,7 @@ namespace ClrSpy
         protected readonly ClrHeap heap;
         protected readonly ClrAppDomain domain;
 
-        protected readonly ClrType typeTask, typeDelegate;
+        protected readonly ClrType typeTask, typeDelegate, typeDelayPromise;
         protected readonly ClrInstanceField fieldDelegateTarget, fieldTaskAction, fieldTaskScheduler;
 
         protected abstract IEnumerable<ulong> EnumerateThreadPoolWorkQueue(ulong workQueueRef);
@@ -169,29 +169,16 @@ namespace ClrSpy
             }
         }
 
-        /*
-        protected ulong TaskFromDelayPromise(ulong promise)
-        {
-            var typeDelayPromise = heap.GetTypeByName("System.Threading.Tasks.Task+DelayPromise");
-            var fieldContinuationObject = typeDelayPromise.GetFieldByName("m_continuationObject");
-
-            var continuation = (ulong)fieldContinuationObject.GetValue(promise);
-            var typeContinuation = heap.GetObjectType(continuation);
-            var fieldAction = typeContinuation.GetFieldByName("_target");
-
-            var target = fieldAction.GetValue(continuation);
-        }*/
-
         public ClrDriver(ClrRuntime runtime)
         {
             (this.runtime, heap, domain) = (runtime, runtime.Heap, runtime.AppDomains[0]);
 
             typeDelegate = heap.GetTypeByName("System.Delegate");
             fieldDelegateTarget = typeDelegate.GetFieldByName("_target");
-
             typeTask = heap.GetTypeByName("System.Threading.Tasks.Task");
             fieldTaskAction = typeTask.GetFieldByName("m_action");
             fieldTaskScheduler = typeTask.GetFieldByName("m_taskScheduler");
+            typeDelayPromise = heap.GetTypeByName("System.Threading.Tasks.Task+DelayPromise");
         }
     }
 }
