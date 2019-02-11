@@ -64,7 +64,10 @@ namespace ClrSpy
             return dataTarget.ClrVersions[0].CreateRuntime();
         }
 
-        [Command("pstacks", Description = "Shows parallel stacks")]
+        [Command("pstacks",
+            Description = "Shows parallel stacks, represented as a tree. "
+                + "Stack traces merged by common part and sorted by number of threads sharing the same stack trace in descending order."
+            )]
         public class ParallelStacks
         {
             [Argument(0, Description = "Process name, PID or dump filename")]
@@ -78,7 +81,7 @@ namespace ClrSpy
             }
         }
 
-        [Command("tasks", Description = "Shows tasks")]
+        [Command("tasks", Description = "Shows list of ThreadPool and Timer tasks.")]
         public class TasksCommand
         {
             [Argument(0, Description = "Process name, PID or dump filename")]

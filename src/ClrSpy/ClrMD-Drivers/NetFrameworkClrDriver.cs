@@ -8,13 +8,9 @@ namespace ClrSpy
 {
     public class NetFrameworkClrDriver : ClrDriver
     {
-        /*
-        protected override ulong GetTaskAction(ulong task)
-        {
-            var typeTask = heap.GetTypeByName("System.Threading.Tasks.Task");
-            var fieldTaskContinuationObject = typeTask.GetFieldByName("m_continuationObject");
-            return (ulong)fieldTaskContinuationObject.GetValue(task);
-        }*/
+        protected readonly ClrType typeTimerQueue, typeTimerQueueTimer;
+        protected readonly ClrStaticField fieldSQueue;
+        protected readonly ClrInstanceField fieldTimers, fieldNext, fieldState;
 
         protected override IEnumerable<ulong> EnumerateThreadPoolWorkQueue(ulong workQueueRef)
         {
@@ -55,14 +51,6 @@ namespace ClrSpy
 
         public override IEnumerable<ulong> EnumerateTimerTasks()
         {
-            var typeTimerQueue = heap.GetTypeByName("System.Threading.TimerQueue");
-            var typeTimerQueueTimer = heap.GetTypeByName("System.Threading.TimerQueueTimer");
-            var fieldSQueue = typeTimerQueue.GetStaticFieldByName("s_queue");
-
-            var fieldTimers = typeTimerQueue.GetFieldByName("m_timers");
-            var fieldNext = typeTimerQueueTimer.GetFieldByName("m_next");
-            var fieldState = typeTimerQueueTimer.GetFieldByName("m_state");
-
             if (fieldSQueue.IsInitialized(domain)) {
                 var timeQueue = (ulong)fieldSQueue.GetValue(domain);
                 for (ulong timer = (ulong)fieldTimers.GetValue(timeQueue); timer != 0; timer = (ulong)fieldNext.GetValue(timer)) {
@@ -73,6 +61,14 @@ namespace ClrSpy
             }
         }
 
-        public NetFrameworkClrDriver(ClrRuntime runtime) : base(runtime) {}
+        public NetFrameworkClrDriver(ClrRuntime runtime) : base(runtime)
+        {
+            typeTimerQueue = heap.GetTypeByName("System.Threading.TimerQueue");
+            fieldSQueue = typeTimerQueue.GetStaticFieldByName("s_queue");
+            fieldTimers = typeTimerQueue.GetFieldByName("m_timers");
+            typeTimerQueueTimer = heap.GetTypeByName("System.Threading.TimerQueueTimer");
+            fieldNext = typeTimerQueueTimer.GetFieldByName("m_next");
+            fieldState = typeTimerQueueTimer.GetFieldByName("m_state");
+        }
     }
 }
