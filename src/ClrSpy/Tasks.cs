@@ -2,10 +2,8 @@ using System;
 using System.IO;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
+using System.Text.RegularExpressions;
 using Microsoft.Diagnostics.Runtime;
-using Microsoft.Diagnostics.Runtime.Desktop;
 
 namespace ClrSpy
 {
@@ -31,11 +29,15 @@ namespace ClrSpy
 
     public static class TasksExtensions
     {
-        public static void WriteTasks(this TextWriter w, IEnumerable<ThreadPoolItem> tasks)
+        private static readonly Regex reAngleBrackets = new Regex(@"\+\<([^>]+)\>", RegexOptions.Compiled);
+
+        private static string MakeReadableTaskName(string s) =>
+            reAngleBrackets.Replace(s, ".$1.");
+
+        public static void WriteGroupedTasks(this TextWriter w, IEnumerable<ThreadPoolItem> tasks)
         {
-            foreach (var t in tasks) {
-                Console.WriteLine(t.MethodName);
-            }
+            foreach (var group in tasks.GroupBy(o => o.MethodName).OrderByDescending(g => g.Count()))
+                Console.WriteLine($"{group.Count()}\t{MakeReadableTaskName(group.Key)}");
         }
     }
 }
