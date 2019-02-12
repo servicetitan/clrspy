@@ -80,6 +80,8 @@ namespace ClrSpy
                 }
                 dataTarget = DataTarget.AttachToProcess(pid, (uint)Timeout.TotalMilliseconds, AttachFlag.NonInvasive);
             }
+            if (dataTarget.ClrVersions.Count == 0)
+                throw new FindProcessException("This process is not Managed");
             return dataTarget.ClrVersions[0].CreateRuntime();
         }
 
@@ -154,9 +156,9 @@ namespace ClrSpy
                     for (int i = 0; i < gensStr.Length; ++i) {
                         var ch = gensStr[i].Trim().Last();
                         switch (ch) {
+                            case '0':
                             case '1':
                             case '2':
-                            case '3':
                                 listGenToConnect.Add(Convert.ToInt32(ch.ToString()));
                                 break;
                             default: {

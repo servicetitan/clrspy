@@ -27,7 +27,7 @@ namespace ClrSpy
                     }
                 }
                 else {
-                    if (last?.Children.Count > 1) {
+                    if (last?.Children?.Count > 1) {
                         last.Children = MergeTrees(last.Children);
                     }
                     r.Add(node);
