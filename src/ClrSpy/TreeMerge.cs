@@ -55,7 +55,11 @@ namespace ClrSpy
             return MergeTrees(tree);
         }
 
-        public static void WriteTree(this TextWriter w, List<Node> tree) => WriteTree(w, tree, new List<bool>());
+        public static void WriteTree(this TextWriter w, List<Node> tree)
+        {
+            w.WriteLine("Parallel Stacks:\n");
+            WriteTree(w, tree, new List<bool>());
+        }
 
         private static void WriteTree(this TextWriter w, List<Node> tree, List<bool> parentLines)
         {

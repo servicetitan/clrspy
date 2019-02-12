@@ -23,7 +23,14 @@ namespace ClrSpy
     }
 
     [Command(Name = "ClrSpy", Description = "CLR Monitoring Tool")]
-    [Subcommand(typeof(ParallelStacks), typeof(Heap), typeof(TasksCommand))]
+    [Subcommand(
+        typeof(Stacks),
+        typeof(ParallelStacks),
+        typeof(Heap),
+        typeof(TasksCommand),
+        typeof(AllTasks),
+        typeof(Handles)
+        )]
     public class App
     {
         private static TimeSpan Timeout = TimeSpan.FromSeconds(5);
@@ -85,6 +92,21 @@ namespace ClrSpy
             return dataTarget.ClrVersions[0].CreateRuntime();
         }
 
+        [Command("stacks", Description = "Shows stack traces")]
+        public class Stacks
+        {
+            [Argument(0, Description = "Process name, PID or dump filename")]
+            private string Target { get; }
+
+            [Option(Description = "Output as JSON", LongName = "json")]
+            public bool Json { get; set; }
+
+            private void OnExecute(IConsole console)
+            {
+                console.Out.WriteStacks(CallStacks.GetStackTraces(GetTargetRuntime(Target)), Json);
+            }
+        }
+
         [Command("pstacks",
             Description = "Shows parallel stacks, represented as a tree. "
                 + "Stack traces merged by common part and sorted by number of threads sharing the same stack trace in descending order."
@@ -94,11 +116,13 @@ namespace ClrSpy
             [Argument(0, Description = "Process name, PID or dump filename")]
             private string Target { get; }
 
+            [Option(Description = "Read JSON-serialized stacktraces from STDIN", LongName = "readjson")]
+            public bool ReadJson { get; set; }
+
             private void OnExecute(IConsole console)
             {
-                var runtime = GetTargetRuntime(Target);
-                console.Out.WriteLine("Parallel Stacks:\n");
-                console.Out.WriteTree(Tree.MergeChains(CallStacks.GetStackTraces(runtime)));
+                IEnumerable<IEnumerable<object>> chains = ReadJson ? CallStacks.ReadJsons(console.In) : CallStacks.GetStackTraces(GetTargetRuntime(Target));
+                console.Out.WriteTree(Tree.MergeChains(chains));
             }
         }
 
@@ -112,6 +136,31 @@ namespace ClrSpy
             {
                 console.Out.WriteLine("Tasks:\n");
                 console.Out.WriteGroupedTasks(new TasksSpy(GetTargetRuntime(Target)).GetTasks());
+            }
+        }
+
+        [Command("alltasks", Description = "Shows list of all tasks, found in the Heap.")]
+        public class AllTasks
+        {
+            [Argument(0, Description = "Process name, PID or dump filename")]
+            private string Target { get; }
+
+            private void OnExecute(IConsole console)
+            {
+                console.Out.WriteLine("All Tasks:\n");
+                console.Out.WriteGroupedTasks(new TasksSpy(GetTargetRuntime(Target)).GetAllTasks());
+            }
+        }
+
+        [Command("handles", Description = "Shows list of all handles.")]
+        public class Handles
+        {
+            [Argument(0, Description = "Process name, PID or dump filename")]
+            private string Target { get; }
+
+            private void OnExecute(IConsole console)
+            {
+                console.Out.WriteGroupedHandles(new HandleSpy(GetTargetRuntime(Target)).GetAllHandles());
             }
         }
 
