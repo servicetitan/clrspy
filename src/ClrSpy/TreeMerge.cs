@@ -39,7 +39,7 @@ namespace ClrSpy
         public static List<Node> MergeChains(IEnumerable<IEnumerable<object>> chains)
         {
             var sorted = chains.Select(c => c.ToArray())
-                .Select(c => KeyValuePair.Create(string.Join(".", c.Select(o => o.ToString())), c))
+                .Select(c => new KeyValuePair<string, object[]>(string.Join(".", c.Select(o => o.ToString())), c))
                 .OrderBy(kv => kv.Key).Select(kv => kv.Value).ToArray();
             var tree = sorted.Select(c => {
                 Node node = null;

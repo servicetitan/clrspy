@@ -36,7 +36,7 @@ namespace ClrSpy
         public static void WriteGroupedHandles(this TextWriter w, IEnumerable<HandleInfo> handles)
         {
             w.WriteLine("Handles:\n");
-            foreach (var g in handles.GroupBy(h => h.ClrHandle.Type.Name).OrderByDescending(g => g.Count())) {
+            foreach (var g in handles.GroupBy(h => h.ClrHandle?.Type.Name ?? "").OrderByDescending(g => g.Count())) {
                 Console.WriteLine($"{g.Count()}\t{ClrMdUtils.MakeReadableTypeName(g.Key)}");
             }
         }
