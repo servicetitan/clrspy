@@ -45,7 +45,7 @@ namespace ClrSpy
                 .SelectMany(host => StacksFromJson(Remote.ExecuteCommand(host, login, password, $"clrspy stacks --json {target}")));
 
         public static IEnumerable<IEnumerable<object>> ReadJsons(TextReader reader) =>
-            Util.ReadAllLines(reader).SelectMany(json => StacksFromJson(json) ?? Array.Empty<string[]>());
+            reader.ReadAllLines().SelectMany(json => StacksFromJson(json) ?? Array.Empty<string[]>());
 
         public static void WriteStacks(this TextWriter w, IEnumerable<StackFrameWrapper[]> stacks, bool printAsJson)
         {

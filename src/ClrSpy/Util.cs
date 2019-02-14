@@ -13,7 +13,7 @@ namespace ClrSpy
                 yield return generator();
         }
 
-        public static IEnumerable<string> ReadAllLines(TextReader reader) =>
+        public static IEnumerable<string> ReadAllLines(this TextReader reader) =>
             Generate(reader.ReadLine).TakeWhile(o => o != null);
     }
 }
