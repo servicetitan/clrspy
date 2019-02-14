@@ -65,9 +65,13 @@ namespace ClrSpy
             }
         }
 
-        private static ClrRuntime GetTargetRuntime(string target)
+        private static ClrRuntime GetTargetRuntime(string? target)
         {
-            DataTarget dataTarget = null;
+            if (target == null) {
+                throw new Exception("Target argument is mandatory");
+            }
+
+            DataTarget dataTarget;
             if (Path.GetExtension(target)?.ToUpper() == ".DMP") {
                 dataTarget = DataTarget.LoadCrashDump(target);
             }
@@ -96,7 +100,7 @@ namespace ClrSpy
         public class Stacks
         {
             [Argument(0, Description = "Process name, PID or dump filename")]
-            private string Target { get; }
+            private string? Target { get; }
 
             [Option(Description = "Output as JSON", LongName = "json")]
             public bool Json { get; set; }
@@ -114,9 +118,9 @@ namespace ClrSpy
         public class ParallelStacks
         {
             [Argument(0, Description = "Process name, PID or dump filename")]
-            private string Target { get; }
+            private string? Target { get; }
 
-            public string[] RemainingArguments { get; }
+            public string[]? RemainingArguments { get; }
 
             [Option(Description = "Read JSON-serialized stacktraces from STDIN", LongName = "readjson", ShortName = "j")]
             public bool ReadJson { get; set; }
@@ -125,15 +129,22 @@ namespace ClrSpy
             public bool Remote { get; set; }
 
             [Option(Description = "Remote host login", LongName = "login", ShortName = "l")]
-            public string Login { get; set; }
+            public string? Login { get; set; }
 
             [Option(Description = "Remote host password", LongName = "password", ShortName = "p")]
-            public string Password { get; set; }
+            public string? Password { get; set; }
 
             private void OnExecute(IConsole console)
             {
+                if (Target == null) {
+                    throw new Exception("Target argument is mandatory");
+                }
+                if (Remote && (Login == null || Password == null)) {
+                    throw new Exception("--login & --password options are mandatory if you use --remote");
+                }
+
                 IEnumerable<IEnumerable<object>> chains =
-                    Remote ? CallStacks.QueryFromHosts(Target, RemainingArguments, Login, Password)
+                    Remote ? CallStacks.QueryFromHosts(Target, RemainingArguments ?? Array.Empty<string>(), Login ?? "", Password ?? "")
                     : ReadJson ? CallStacks.ReadJsons(console.In)
                     : CallStacks.GetStackTraces(GetTargetRuntime(Target));
                 console.Out.WriteTree(Tree.MergeChains(chains));
@@ -144,7 +155,7 @@ namespace ClrSpy
         public class TasksCommand
         {
             [Argument(0, Description = "Process name, PID or dump filename")]
-            private string Target { get; }
+            private string? Target { get; }
 
             private void OnExecute(IConsole console)
             {
@@ -157,7 +168,7 @@ namespace ClrSpy
         public class AllTasks
         {
             [Argument(0, Description = "Process name, PID or dump filename")]
-            private string Target { get; }
+            private string? Target { get; }
 
             private void OnExecute(IConsole console)
             {
@@ -170,7 +181,7 @@ namespace ClrSpy
         public class Handles
         {
             [Argument(0, Description = "Process name, PID or dump filename")]
-            private string Target { get; }
+            private string? Target { get; }
 
             private void OnExecute(IConsole console)
             {
@@ -182,16 +193,16 @@ namespace ClrSpy
         public class Heap
         {
             [Argument(0, Description = "Process name, PID or dump filename")]
-            private string Target { get; }
+            private string? Target { get; }
 
             [Option(Description = "Cron schedule", LongName = "schedule", ShortName = "s", ShowInHelpText = true)]
-            public string Schedule { get; set; }
+            public string? Schedule { get; set; }
 
             [Option(Description = "Output filename template. Default - don't create output files",
                 LongName = "output",
                 ShortName = "o",
                 ShowInHelpText = true)]
-            public string OutputFilenameTemplate { get; set; }
+            public string? OutputFilenameTemplate { get; set; }
 
             [Option(Description = "GC Gen to collect. Default - 'gen0, gen1, gen2'",
                 LongName = "gen",

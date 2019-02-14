@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
+#nullable disable
 namespace ClrSpy
 {
     public static class DictionaryDiffComparer
