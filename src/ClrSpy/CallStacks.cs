@@ -2,6 +2,8 @@ using System;
 using System.IO;
 using System.Collections.Generic;
 using System.Linq;
+using System.Management.Automation;
+using System.Management.Automation.Runspaces;
 using Microsoft.Diagnostics.Runtime;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -35,10 +37,17 @@ namespace ClrSpy
 
     public static class CallStacks
     {
+        private static IEnumerable<IEnumerable<object>> StacksFromJson(string json) =>
+            JsonConvert.DeserializeObject<string[][]>(json);
+
+        public static IEnumerable<IEnumerable<object>> QueryFromHosts(string target, IEnumerable<string> hosts, string login, string password) =>
+            hosts.AsParallel()
+                .SelectMany(host => StacksFromJson(Remote.ExecuteCommand(host, login, password, $"clrspy stacks --json {target}")));
+
         public static IEnumerable<IEnumerable<object>> ReadJsons(TextReader reader)
         {
             for (string line; (line = reader.ReadLine()) != null;) {
-                foreach (var stackTrace in JsonConvert.DeserializeObject<string[][]>(line) ?? Array.Empty<string[]>())
+                foreach (var stackTrace in StacksFromJson(line) ?? Array.Empty<string[]>())
                     yield return stackTrace;
             }
         }

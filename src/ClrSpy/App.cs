@@ -107,7 +107,7 @@ namespace ClrSpy
             }
         }
 
-        [Command("pstacks",
+        [Command("pstacks", ThrowOnUnexpectedArgument = false,
             Description = "Shows parallel stacks, represented as a tree. "
                 + "Stack traces merged by common part and sorted by number of threads sharing the same stack trace in descending order."
             )]
@@ -116,12 +116,26 @@ namespace ClrSpy
             [Argument(0, Description = "Process name, PID or dump filename")]
             private string Target { get; }
 
-            [Option(Description = "Read JSON-serialized stacktraces from STDIN", LongName = "readjson")]
+            public string[] RemainingArguments { get; }
+
+            [Option(Description = "Read JSON-serialized stacktraces from STDIN", LongName = "readjson", ShortName = "j")]
             public bool ReadJson { get; set; }
+
+            [Option(Description = "Query Stack traces from remotehosts", LongName = "remote")]
+            public bool Remote { get; set; }
+
+            [Option(Description = "Remote host login", LongName = "login", ShortName = "l")]
+            public string Login { get; set; }
+
+            [Option(Description = "Remote host password", LongName = "password", ShortName = "p")]
+            public string Password { get; set; }
 
             private void OnExecute(IConsole console)
             {
-                IEnumerable<IEnumerable<object>> chains = ReadJson ? CallStacks.ReadJsons(console.In) : CallStacks.GetStackTraces(GetTargetRuntime(Target));
+                IEnumerable<IEnumerable<object>> chains =
+                    Remote ? CallStacks.QueryFromHosts(Target, RemainingArguments, Login, Password)
+                    : ReadJson ? CallStacks.ReadJsons(console.In)
+                    : CallStacks.GetStackTraces(GetTargetRuntime(Target));
                 console.Out.WriteTree(Tree.MergeChains(chains));
             }
         }
