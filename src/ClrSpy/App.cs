@@ -173,7 +173,7 @@ namespace ClrSpy
             private void OnExecute(IConsole console)
             {
                 console.Out.WriteLine("All Tasks:\n");
-                console.Out.WriteGroupedTasks(new TasksSpy(GetTargetRuntime(Target)).GetAllTasks());
+                console.Out.WriteGroupedTasks(new TasksSpy(GetTargetRuntime(Target)).GetAllTasks(console.Error));
             }
         }
 

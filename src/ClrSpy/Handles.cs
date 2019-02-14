@@ -37,7 +37,7 @@ namespace ClrSpy
         {
             w.WriteLine("Handles:\n");
             foreach (var g in handles.GroupBy(h => h.ClrHandle?.Type.Name ?? "").OrderByDescending(g => g.Count())) {
-                Console.WriteLine($"{g.Count()}\t{ClrMdUtils.MakeReadableTypeName(g.Key)}");
+                w.WriteLine($"{g.Count()}\t{ClrMdUtils.MakeReadableTypeName(g.Key)}");
             }
         }
     }

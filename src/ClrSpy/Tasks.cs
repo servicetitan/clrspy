@@ -22,7 +22,7 @@ namespace ClrSpy
                 .Where(o => o != null);
         }
 
-        public IEnumerable<TaskInfo> GetAllTasks()
+        public IEnumerable<TaskInfo> GetAllTasks(TextWriter errorWriter)
         {
             long count = 0, nextPrint = 1000000;
             foreach (var addr in heap.EnumerateObjectAddresses().Where(a => a != 0)) {
@@ -34,12 +34,12 @@ namespace ClrSpy
                             yield return taskInfo;
                     }
                     if (++count == nextPrint) {
-                        Console.Error.Write($"\rEnumerated {count:n0} objects");
+                        errorWriter.Write($"\rEnumerated {count:n0} objects");
                         nextPrint = count + 1000000;
                     }
                 }
             }
-            Console.Error.WriteLine();
+            errorWriter.WriteLine();
         }
 
         public TasksSpy(ClrRuntime runtime) {
@@ -53,7 +53,7 @@ namespace ClrSpy
         public static void WriteGroupedTasks(this TextWriter w, IEnumerable<TaskInfo> tasks)
         {
             foreach (var group in tasks.GroupBy(o => o.MethodName).OrderByDescending(g => g.Count()))
-                Console.WriteLine($"{group.Count()}\t{ClrMdUtils.MakeReadableTypeName(group.Key)}");
+                w.WriteLine($"{group.Count()}\t{ClrMdUtils.MakeReadableTypeName(group.Key)}");
         }
     }
 }

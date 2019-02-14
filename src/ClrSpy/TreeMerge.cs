@@ -70,18 +70,18 @@ namespace ClrSpy
                 bool isSimpleChain = false;
                 for (List<Node>? children; ; node = children[0]) {
                     foreach (var v in parentLines) {
-                        Console.Write(v ? "│ " : "  ");
+                        w.Write(v ? "│ " : "  ");
                     }
                     if (parentLines.Count > 0) {
-                        Console.Write(isSimpleChain
+                        w.Write(isSimpleChain
                             ? (isLast ? " " : "│")
                             : isLast ? "└" : "├");
                     }
-                    Console.Write(node.Name);
+                    w.Write(node.Name);
                     children = node.Children;
                     if (!isSimpleChain && node.Weight > 1)
-                        Console.Write($" - {node.Weight} threads");
-                    Console.WriteLine();
+                        w.Write($" - {node.Weight} threads");
+                    w.WriteLine();
                     if (children == null || children.Count != 1) {
                         if (children != null) {
                             var childLines = parentLines.ToList();
@@ -90,8 +90,8 @@ namespace ClrSpy
                         }
                         if (isSimpleChain) {
                             foreach (var v in parentLines)
-                                Console.Write(v ? "│ " : "  ");
-                            Console.WriteLine(isLast ? " " : "│");
+                                w.Write(v ? "│ " : "  ");
+                            w.WriteLine(isLast ? " " : "│");
                         }
                         break;
                     }

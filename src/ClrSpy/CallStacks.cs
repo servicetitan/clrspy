@@ -51,7 +51,7 @@ namespace ClrSpy
         {
             if (printAsJson) {
                 var ar = stacks.Select(st => st.Select(f => f.ToString()).ToArray()).ToArray();
-                Console.WriteLine(JsonConvert.SerializeObject(ar));
+                w.WriteLine(JsonConvert.SerializeObject(ar));
             }
             else {
                 foreach (var st in stacks) {
