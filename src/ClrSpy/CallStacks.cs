@@ -40,9 +40,11 @@ namespace ClrSpy
         private static IEnumerable<IEnumerable<object>> StacksFromJson(string json) =>
             JsonConvert.DeserializeObject<string[][]>(json);
 
-        public static IEnumerable<IEnumerable<object>> QueryFromHosts(string target, IEnumerable<string> hosts, string login, string password) =>
-            hosts.AsParallel()
-                .SelectMany(host => StacksFromJson(Remote.ExecuteCommand(host, login, password, $"clrspy stacks --json {target}")));
+        public static IEnumerable<IEnumerable<object>> QueryFromHosts(string? clrspyPath, string target, IEnumerable<string> hosts, string login, string password)
+        {
+            clrspyPath = clrspyPath ?? "clrspy";
+            return hosts.AsParallel().SelectMany(host => StacksFromJson(Remote.ExecuteCommand(host, login, password, $"{clrspyPath} stacks --json {target}")));
+        }
 
         public static IEnumerable<IEnumerable<object>> ReadJsons(TextReader reader) =>
             reader.ReadAllLines().SelectMany(json => StacksFromJson(json) ?? Array.Empty<string[]>());
