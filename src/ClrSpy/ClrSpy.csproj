@@ -19,7 +19,6 @@
     <PackageReference Include="Serilog.Extensions.Logging" Version="2.0.2" />
     <PackageReference Include="Serilog.Sinks.Console" Version="3.1.2-dev-00779" />
     <PackageReference Include="Cronos" Version="0.7.0" />
-    <PackageReference Include="System.Management.Automation" Version="6.1.2" />
 
   </ItemGroup>
 

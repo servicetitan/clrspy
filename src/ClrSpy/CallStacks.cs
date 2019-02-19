@@ -2,8 +2,6 @@ using System;
 using System.IO;
 using System.Collections.Generic;
 using System.Linq;
-using System.Management.Automation;
-using System.Management.Automation.Runspaces;
 using Microsoft.Diagnostics.Runtime;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -39,12 +37,6 @@ namespace ClrSpy
     {
         private static IEnumerable<IEnumerable<object>> StacksFromJson(string json) =>
             JsonConvert.DeserializeObject<string[][]>(json);
-
-        public static IEnumerable<IEnumerable<object>> QueryFromHosts(string? clrspyPath, string target, IEnumerable<string> hosts, string login, string password)
-        {
-            clrspyPath = clrspyPath ?? "clrspy";
-            return hosts.AsParallel().SelectMany(host => StacksFromJson(Remote.ExecuteCommand(host, login, password, $"{clrspyPath} stacks --json {target}")));
-        }
 
         public static IEnumerable<IEnumerable<object>> ReadJsons(TextReader reader) =>
             reader.ReadAllLines().SelectMany(json => StacksFromJson(json) ?? Array.Empty<string[]>());

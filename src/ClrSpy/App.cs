@@ -125,33 +125,14 @@ namespace ClrSpy
             [Option(Description = "Read JSON-serialized stacktraces from STDIN", LongName = "readjson", ShortName = "j")]
             public bool ReadJson { get; set; }
 
-            [Option(Description = "Query Stack traces from remote hosts. "
-                + "This feature depends on PowerShell and enabled WinRM service on remote host. "
-                + @"Also the host should be added to the list of Trusted hosts: wsman:\localhost\Client\TrustedHosts.",
-                LongName = "remote")]
-            public bool Remote { get; set; }
-
-            [Option(Description = "Remote host login", LongName = "login", ShortName = "l")]
-            public string? Login { get; set; }
-
-            [Option(Description = "Remote host password", LongName = "password", ShortName = "p")]
-            public string? Password { get; set; }
-
-            [Option(Description = "ClrSpy path at the remote computer", LongName = "clrspypath", ShortName = "c")]
-            public string? ClrSpyPath { get; set; }
-
             private void OnExecute(IConsole console)
             {
                 if (Target == null) {
                     throw new Exception("Target argument is mandatory");
                 }
-                if (Remote && (Login == null || Password == null)) {
-                    throw new Exception("--login & --password options are mandatory if you use --remote");
-                }
 
                 IEnumerable<IEnumerable<object>> chains =
-                    Remote ? CallStacks.QueryFromHosts(ClrSpyPath, Target, RemainingArguments ?? Array.Empty<string>(), Login ?? "", Password ?? "")
-                    : ReadJson ? CallStacks.ReadJsons(console.In)
+                    ReadJson ? CallStacks.ReadJsons(console.In)
                     : CallStacks.GetStackTraces(GetTargetRuntime(Target));
                 console.Out.WriteTree(Tree.MergeChains(chains));
             }
