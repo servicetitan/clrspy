@@ -120,8 +120,6 @@ namespace ClrSpy
             [Argument(0, Description = "Process name, PID or dump filename")]
             private string? Target { get; }
 
-            public string[]? RemainingArguments { get; }
-
             [Option(Description = "Read JSON-serialized stacktraces from STDIN", LongName = "readjson", ShortName = "j")]
             public bool ReadJson { get; set; }
 
