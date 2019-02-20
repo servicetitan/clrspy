@@ -56,8 +56,9 @@ namespace ClrSpy
             }
         }
 
-        public static IEnumerable<StackFrameWrapper[]> GetStackTraces(ClrRuntime runtime) =>
-        runtime.Threads.Select(t => t.EnumerateStackTrace().Reverse().Select(o => new StackFrameWrapper(o)).ToArray())
-            .Where(o => o.Length > 0);
+        public static IEnumerable<StackFrameWrapper[]> GetStackTraces(ClrRuntime runtime, bool fromTop = false) =>
+            runtime.Threads.Select(t => t.EnumerateStackTrace())
+                .Select(o => (fromTop ? o : o.Reverse()).Select(o => new StackFrameWrapper(o)).ToArray())
+                .Where(o => o.Length > 0);
     }
 }

@@ -123,6 +123,9 @@ namespace ClrSpy
             [Option(Description = "Read JSON-serialized stacktraces from STDIN", LongName = "readjson", ShortName = "j")]
             public bool ReadJson { get; set; }
 
+            [Option(Description = "Merge stacks from the Top", LongName = "fromtop", ShortName = "t")]
+            public bool FromTop { get; set; }
+
             private void OnExecute(IConsole console)
             {
                 if (Target == null) {
@@ -131,7 +134,7 @@ namespace ClrSpy
 
                 IEnumerable<IEnumerable<object>> chains =
                     ReadJson ? CallStacks.ReadJsons(console.In)
-                    : CallStacks.GetStackTraces(GetTargetRuntime(Target));
+                    : CallStacks.GetStackTraces(GetTargetRuntime(Target), FromTop);
                 console.Out.WriteTree(Tree.MergeChains(chains));
             }
         }
