@@ -1,12 +1,15 @@
 using System;
 using System.Collections.Concurrent;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Microsoft.Diagnostics.Runtime;
 
 namespace ClrSpy
 {
     public static class ClrMdUtils
     {
+        private static readonly Regex reAngleBrackets = new Regex(@"\+\<([^>]+)\>", RegexOptions.Compiled);
+
         public static ClrModule GetCorlib(ClrRuntime runtime) =>
             runtime.Modules.FirstOrDefault(module => {
                 var name = module.AssemblyName.ToLower();
@@ -20,5 +23,11 @@ namespace ClrSpy
                 || runtime.ClrInfo.Flavor == ClrFlavor.Desktop) //!!!D
             ? coreThreadPoolByRuntime.GetOrAdd(runtime, _ => new CoreThreadPool(runtime))
             : runtime.ThreadPool;
+
+        public static string MakeReadableTypeName(string s) =>
+            reAngleBrackets.Replace(s, ".$1.")
+            .Replace("System.Threading.Tasks.", "")
+            .Replace("+", ".")
+            ;
     }
 }

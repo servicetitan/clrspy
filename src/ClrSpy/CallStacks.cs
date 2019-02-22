@@ -3,6 +3,8 @@ using System.IO;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Diagnostics.Runtime;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace ClrSpy
 {
@@ -10,7 +12,7 @@ namespace ClrSpy
     {
         public ClrStackFrame Frame { get; }
 
-        private string name;
+        private string? name;
 
         public override string ToString()
         {
@@ -33,8 +35,30 @@ namespace ClrSpy
 
     public static class CallStacks
     {
-        public static IEnumerable<StackFrameWrapper[]> GetStackTraces(ClrRuntime runtime) =>
-            runtime.Threads.Select(t => t.EnumerateStackTrace().Reverse().Select(o => new StackFrameWrapper(o)).ToArray())
+        private static IEnumerable<IEnumerable<object>> StacksFromJson(string json) =>
+            JsonConvert.DeserializeObject<string[][]>(json);
+
+        public static IEnumerable<IEnumerable<object>> ReadJsons(TextReader reader) =>
+            reader.ReadAllLines().SelectMany(json => StacksFromJson(json) ?? Array.Empty<string[]>());
+
+        public static void WriteStacks(this TextWriter w, IEnumerable<StackFrameWrapper[]> stacks, bool printAsJson)
+        {
+            if (printAsJson) {
+                var ar = stacks.Select(st => st.Select(f => f.ToString()).ToArray()).ToArray();
+                w.WriteLine(JsonConvert.SerializeObject(ar));
+            }
+            else {
+                foreach (var st in stacks) {
+                    foreach (var frame in st)
+                        w.WriteLine(frame.ToString());
+                    w.WriteLine();
+                }
+            }
+        }
+
+        public static IEnumerable<StackFrameWrapper[]> GetStackTraces(ClrRuntime runtime, bool fromTop = false) =>
+            runtime.Threads.Select(t => t.EnumerateStackTrace())
+                .Select(o => (fromTop ? o : o.Reverse()).Select(o => new StackFrameWrapper(o)).ToArray())
                 .Where(o => o.Length > 0);
     }
 }

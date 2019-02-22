@@ -9,25 +9,28 @@ namespace ClrSpy
     {
         public class Node
         {
-            public string Name { get; internal set; }
-            public List<object> Objects { get; internal set; }
+            public string Name { get; }
+            public List<object> Objects { get; internal set;  }
             public int Weight => Objects.Count;
-            public List<Node> Children { get; internal set; }
+            public List<Node>? Children { get; internal set; }
+
+            public Node(string name, List<object> objects) =>
+                (Name, Objects) = (name, objects);
         }
 
         private static List<Node> MergeTrees(IEnumerable<Node> trees)
         {
             var r = new List<Node>();
             foreach (var node in trees) {
-                Node last = r.Count == 0 ? null : r.Last();
-                if (last?.Name == node.Name) {
+                Node? last = r.Count == 0 ? null : r.Last();
+                if (last != null && last.Name == node.Name) {
                     last.Objects = last.Objects.Concat(node.Objects).ToList();
                     if (last.Children != null || node.Children != null) {
                         last.Children = MergeTrees((last.Children ?? new List<Node>()).Concat(node.Children ?? new List<Node>()));
                     }
                 }
                 else {
-                    if (last?.Children?.Count > 1) {
+                    if (last?.Children != null && last.Children.Count > 1) {
                         last.Children = MergeTrees(last.Children);
                     }
                     r.Add(node);
@@ -39,14 +42,12 @@ namespace ClrSpy
         public static List<Node> MergeChains(IEnumerable<IEnumerable<object>> chains)
         {
             var sorted = chains.Select(c => c.ToArray())
-                .Select(c => KeyValuePair.Create(string.Join(".", c.Select(o => o.ToString())), c))
+                .Select(c => new KeyValuePair<string, object[]>(string.Join(".", c.Select(o => o.ToString())), c))
                 .OrderBy(kv => kv.Key).Select(kv => kv.Value).ToArray();
             var tree = sorted.Select(c => {
-                Node node = null;
+                Node? node = null;
                 for (int i = c.Length; --i >= 0;) {
-                    node = new Node {
-                        Name = c[i].ToString(),
-                        Objects = new List<object> { c[i] },
+                    node = new Node(c[i].ToString(), new List<object> { c[i] }) {
                         Children = node != null ? new List<Node> { node } : null,
                     };
                 }
@@ -55,7 +56,11 @@ namespace ClrSpy
             return MergeTrees(tree);
         }
 
-        public static void WriteTree(this TextWriter w, List<Node> tree) => WriteTree(w, tree, new List<bool>());
+        public static void WriteTree(this TextWriter w, List<Node> tree)
+        {
+            w.WriteLine("Parallel Stacks:\n");
+            WriteTree(w, tree, new List<bool>());
+        }
 
         private static void WriteTree(this TextWriter w, List<Node> tree, List<bool> parentLines)
         {
@@ -63,21 +68,21 @@ namespace ClrSpy
                 var node = tree[i];
                 bool isLast = i == tree.Count - 1;
                 bool isSimpleChain = false;
-                for (List<Node> children; ; node = children[0]) {
+                for (List<Node>? children; ; node = children[0]) {
                     foreach (var v in parentLines) {
-                        Console.Write(v ? "│ " : "  ");
+                        w.Write(v ? "│ " : "  ");
                     }
                     if (parentLines.Count > 0) {
-                        Console.Write(isSimpleChain
+                        w.Write(isSimpleChain
                             ? (isLast ? " " : "│")
                             : isLast ? "└" : "├");
                     }
-                    Console.Write(node.Name);
+                    w.Write(node.Name);
                     children = node.Children;
                     if (!isSimpleChain && node.Weight > 1)
-                        Console.Write($" - {node.Weight} threads");
-                    Console.WriteLine();
-                    if (children?.Count != 1) {
+                        w.Write($" - {node.Weight} threads");
+                    w.WriteLine();
+                    if (children == null || children.Count != 1) {
                         if (children != null) {
                             var childLines = parentLines.ToList();
                             childLines.Add(!isLast);
@@ -85,8 +90,8 @@ namespace ClrSpy
                         }
                         if (isSimpleChain) {
                             foreach (var v in parentLines)
-                                Console.Write(v ? "│ " : "  ");
-                            Console.WriteLine(isLast ? " " : "│");
+                                w.Write(v ? "│ " : "  ");
+                            w.WriteLine(isLast ? " " : "│");
                         }
                         break;
                     }

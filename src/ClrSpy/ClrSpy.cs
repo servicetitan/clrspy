@@ -9,6 +9,7 @@ using Cronos;
 using Microsoft.Diagnostics.Runtime;
 using Microsoft.Extensions.Logging;
 
+#nullable disable
 namespace ClrSpy
 {
     public class ClrSpyConfiguration
@@ -20,6 +21,7 @@ namespace ClrSpy
         public int PrintDiffLimit { get; set; }
         public bool[] GcGenToCollect { get; } = new bool[3];
     }
+
     public class ClrSpy
     {
         private CancellationTokenSource _stopCancellationTokenSource;

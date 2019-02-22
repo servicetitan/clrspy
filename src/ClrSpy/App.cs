@@ -23,7 +23,14 @@ namespace ClrSpy
     }
 
     [Command(Name = "ClrSpy", Description = "CLR Monitoring Tool")]
-    [Subcommand(typeof(ParallelStacks), typeof(Heap), typeof(TasksCommand))]
+    [Subcommand(
+        typeof(Stacks),
+        typeof(ParallelStacks),
+        typeof(Heap),
+        typeof(TasksCommand),
+        typeof(AllTasks),
+        typeof(Handles)
+        )]
     public class App
     {
         private static TimeSpan Timeout = TimeSpan.FromSeconds(5);
@@ -58,9 +65,13 @@ namespace ClrSpy
             }
         }
 
-        private static ClrRuntime GetTargetRuntime(string target)
+        private static ClrRuntime GetTargetRuntime(string? target)
         {
-            DataTarget dataTarget = null;
+            if (target == null) {
+                throw new Exception("Target argument is mandatory");
+            }
+
+            DataTarget dataTarget;
             if (Path.GetExtension(target)?.ToUpper() == ".DMP") {
                 dataTarget = DataTarget.LoadCrashDump(target);
             }
@@ -85,20 +96,46 @@ namespace ClrSpy
             return dataTarget.ClrVersions[0].CreateRuntime();
         }
 
-        [Command("pstacks",
+        [Command("stacks", Description = "Shows stack traces")]
+        public class Stacks
+        {
+            [Argument(0, Description = "Process name, PID or dump filename")]
+            private string? Target { get; }
+
+            [Option(Description = "Output as JSON", LongName = "json")]
+            public bool Json { get; set; }
+
+            private void OnExecute(IConsole console)
+            {
+                console.Out.WriteStacks(CallStacks.GetStackTraces(GetTargetRuntime(Target)), Json);
+            }
+        }
+
+        [Command("pstacks", ThrowOnUnexpectedArgument = false,
             Description = "Shows parallel stacks, represented as a tree. "
                 + "Stack traces merged by common part and sorted by number of threads sharing the same stack trace in descending order."
             )]
         public class ParallelStacks
         {
             [Argument(0, Description = "Process name, PID or dump filename")]
-            private string Target { get; }
+            private string? Target { get; }
+
+            [Option(Description = "Read JSON-serialized stacktraces from STDIN", LongName = "readjson", ShortName = "j")]
+            public bool ReadJson { get; set; }
+
+            [Option(Description = "Merge stacks from the Top", LongName = "fromtop", ShortName = "t")]
+            public bool FromTop { get; set; }
 
             private void OnExecute(IConsole console)
             {
-                var runtime = GetTargetRuntime(Target);
-                console.Out.WriteLine("Parallel Stacks:\n");
-                console.Out.WriteTree(Tree.MergeChains(CallStacks.GetStackTraces(runtime)));
+                if (Target == null) {
+                    throw new Exception("Target argument is mandatory");
+                }
+
+                IEnumerable<IEnumerable<object>> chains =
+                    ReadJson ? CallStacks.ReadJsons(console.In)
+                    : CallStacks.GetStackTraces(GetTargetRuntime(Target), FromTop);
+                console.Out.WriteTree(Tree.MergeChains(chains));
             }
         }
 
@@ -106,7 +143,7 @@ namespace ClrSpy
         public class TasksCommand
         {
             [Argument(0, Description = "Process name, PID or dump filename")]
-            private string Target { get; }
+            private string? Target { get; }
 
             private void OnExecute(IConsole console)
             {
@@ -115,20 +152,45 @@ namespace ClrSpy
             }
         }
 
+        [Command("alltasks", Description = "Shows list of all tasks, found in the Heap.")]
+        public class AllTasks
+        {
+            [Argument(0, Description = "Process name, PID or dump filename")]
+            private string? Target { get; }
+
+            private void OnExecute(IConsole console)
+            {
+                console.Out.WriteLine("All Tasks:\n");
+                console.Out.WriteGroupedTasks(new TasksSpy(GetTargetRuntime(Target)).GetAllTasks(console.Error));
+            }
+        }
+
+        [Command("handles", Description = "Shows list of all handles.")]
+        public class Handles
+        {
+            [Argument(0, Description = "Process name, PID or dump filename")]
+            private string? Target { get; }
+
+            private void OnExecute(IConsole console)
+            {
+                console.Out.WriteGroupedHandles(new HandleSpy(GetTargetRuntime(Target)).GetAllHandles());
+            }
+        }
+
         [Command("heap", Description = "Analyze Heap")]
         public class Heap
         {
             [Argument(0, Description = "Process name, PID or dump filename")]
-            private string Target { get; }
+            private string? Target { get; }
 
             [Option(Description = "Cron schedule", LongName = "schedule", ShortName = "s", ShowInHelpText = true)]
-            public string Schedule { get; set; }
+            public string? Schedule { get; set; }
 
             [Option(Description = "Output filename template. Default - don't create output files",
                 LongName = "output",
                 ShortName = "o",
                 ShowInHelpText = true)]
-            public string OutputFilenameTemplate { get; set; }
+            public string? OutputFilenameTemplate { get; set; }
 
             [Option(Description = "GC Gen to collect. Default - 'gen0, gen1, gen2'",
                 LongName = "gen",

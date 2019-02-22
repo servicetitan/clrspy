@@ -3,20 +3,29 @@ using System.Linq;
 using System.Collections.Generic;
 using Microsoft.Diagnostics.Runtime;
 
+#nullable enable
 namespace ClrSpy
 {
-    public class ThreadPoolItem
+    public struct ObjectInfo
     {
         public ulong Address;
-        public string MethodName;
+        public ClrType Type;
+    }
+
+    public class TaskInfo
+    {
+        public ulong Address;
+        public string? MethodName;
     }
 
     public interface IClrDriver
     {
-        IEnumerable<ulong> EnumerateManagedWorkItems();
-        IEnumerable<ulong> EnumerateTimerTasks();
+        IEnumerable<ObjectInfo> EnumerateManagedWorkItems();
+        IEnumerable<ObjectInfo> EnumerateTimerTasks();
         IEnumerable<ulong> EnumerateStackTasks();
-        ThreadPoolItem GetThreadPoolItem(ulong item);
+        TaskInfo? GetTaskInfo(ObjectInfo oi);
+        bool IsTaskDescendant(ClrType type);
+        bool IsDelegateDescendant(ClrType type);
     }
 
     public abstract class ClrDriver : IClrDriver
@@ -25,10 +34,12 @@ namespace ClrSpy
         protected readonly ClrHeap heap;
         protected readonly ClrAppDomain domain;
 
-        protected readonly ClrType typeTask, typeDelegate, typeDelayPromise;
-        protected readonly ClrInstanceField fieldDelegateTarget, fieldTaskAction, fieldTaskScheduler;
+        protected readonly ClrType typeObject, typeTask, typeDelegate, typeDelayPromise, typeQueueUserWorkItemCallback, typeWaitCallback;
+        protected readonly ClrInstanceField fieldDelegateTarget, fieldTaskAction, fieldTaskScheduler, fieldTaskContinuationObject, fieldCallback;
 
         protected abstract IEnumerable<ulong> EnumerateThreadPoolWorkQueue(ulong workQueueRef);
+
+        private readonly Dictionary<ClrType, bool> isTaskByType = new Dictionary<ClrType, bool>();
 
         public IEnumerable<ulong> EnumerateStackTasks()
         {
@@ -46,7 +57,7 @@ namespace ClrSpy
             }
         }
 
-        public IEnumerable<ulong> EnumerateManagedWorkItems()
+        public IEnumerable<ObjectInfo> EnumerateManagedWorkItems()
         {
             ClrStaticField workQueueField = ClrMdUtils.GetCorlib(runtime).GetTypeByName("System.Threading.ThreadPoolGlobals")?.GetStaticFieldByName("workQueue");
             if (workQueueField != null) {
@@ -56,16 +67,16 @@ namespace ClrSpy
                     ClrType workQueueType = heap.GetObjectType(workQueueRef);                   // should be System.Threading.ThreadPoolWorkQueue
                     if (workQueueType?.Name == "System.Threading.ThreadPoolWorkQueue") {
                         foreach (var item in EnumerateThreadPoolWorkQueue(workQueueRef)) {
-                            yield return item;
+                            yield return new ObjectInfo { Address = item, Type = heap.GetObjectType(item) };
                         }
                     }
                 }
             }
         }
 
-        public virtual IEnumerable<ulong> EnumerateTimerTasks() => throw new NotImplementedException();
+        public virtual IEnumerable<ObjectInfo> EnumerateTimerTasks() => throw new NotImplementedException();
 
-        protected string BuildDelegateMethodName(ClrType targetType, ulong action)
+        protected string? BuildDelegateMethodName(ClrType targetType, ulong action)
         {
             var typeAction = heap.GetObjectType(action);
             var fieldMethodPtr = typeAction.GetFieldByName("_methodPtr");
@@ -87,16 +98,40 @@ namespace ClrSpy
                 + $"{methodTypeName}.{method.Name}";
         }
 
-        protected virtual ulong GetTaskAction(ulong task) =>
-            (ulong)fieldTaskAction.GetValue(task);
-
-        protected string BuildMethodNameFromDelegate(ulong action, ulong task = 0)
+        public bool IsTaskDescendant(ClrType type)
         {
-            var r = " [no action]";
+            if (!isTaskByType.TryGetValue(type, out var r)) {
+                r = type != typeObject && (type == typeTask || IsTaskDescendant(type.BaseType));
+                isTaskByType.Add(type, r);
+            }
+            return r;
+        }
+
+        public  bool IsDelegateDescendant(ClrType type)
+            => type != typeObject && (type == typeDelegate || IsDelegateDescendant(type.BaseType));
+
+        protected virtual ulong GetTaskAction(ulong task)
+        {
+            var r = (ulong)fieldTaskAction.GetValue(task);
+            if (r == 0) {
+                var cont = (ulong)fieldTaskContinuationObject.GetValue(task);
+                if (cont != 0) {
+                    var typeCont = heap.GetObjectType(cont);
+                    if (IsDelegateDescendant(typeCont)) {
+                        r = cont;
+                    }
+                }
+            }
+            return r;
+        }
+
+        protected string? BuildMethodNameFromDelegate(ulong action, ulong task = 0)
+        {
+            string? r = "[no action]";
             if (action != 0) {
                 var target = (ulong)fieldDelegateTarget.GetValue(action);
                 if (target == 0) {
-                    r = " [no target]";
+                    r = "[no target]";
                 }
                 else {
                     r = BuildDelegateMethodName(heap.GetObjectType(target), action);
@@ -120,51 +155,48 @@ namespace ClrSpy
             return r;
         }
 
-        protected ThreadPoolItem GetTask(ulong task)
+        protected TaskInfo? GetTask(ObjectInfo oi)
         {
-            ThreadPoolItem tpi = new ThreadPoolItem() {
-                Address = task,
+            TaskInfo tpi = new TaskInfo() {
+                Address = oi.Address,
             };
 
             // look for the context in m_action._target
-            var action = GetTaskAction(task);
-            tpi.MethodName = BuildMethodNameFromDelegate(action, task);
+            var action = GetTaskAction(oi.Address);
+            if (action == 0)
+                return null;
+
+            tpi.MethodName = BuildMethodNameFromDelegate(action, oi.Address);
             return tpi;
         }
 
-        private ThreadPoolItem GetQueueUserWorkItemCallback(ulong wi)
+        private TaskInfo GetQueueUserWorkItemCallback(ObjectInfo oi)
         {
-            var typeQueueUserWorkItemCallback = heap.GetTypeByName("System.Threading.QueueUserWorkItemCallback");
-            var fieldCallback = typeQueueUserWorkItemCallback.GetFieldByName("callback");
-            var typeWaitCallback = heap.GetTypeByName("System.Threading.WaitCallback");
-
-
-            ThreadPoolItem tpi = new ThreadPoolItem() {
-                Address = wi,
+            TaskInfo tpi = new TaskInfo() {
+                Address = oi.Address,
             };
 
             // look for the callback given to ThreadPool.QueueUserWorkItem()
-            var callback = (ulong)fieldCallback.GetValue(wi);
+            var callback = (ulong)fieldCallback.GetValue(oi.Address);
             tpi.MethodName = BuildMethodNameFromDelegate(callback);
             return tpi;
         }
 
-        public ThreadPoolItem GetThreadPoolItem(ulong item)
+        public TaskInfo? GetTaskInfo(ObjectInfo oi)
         {
-            var itemType = heap.GetObjectType(item);
-
-            switch (itemType.Name) {
+            var typeName = oi.Type.Name;
+            switch (typeName) {
                 case "System.Threading.Tasks.Task":
                 case "System.Threading.Tasks.Task+DelayPromise":
-                    return GetTask(item);
+                    return GetTask(oi);
                 case "System.Threading.QueueUserWorkItemCallback":
-                    return GetQueueUserWorkItemCallback(item);
+                    return GetQueueUserWorkItemCallback(oi);
                 default:
-                    if (itemType.Name.StartsWith("System.Threading.Tasks.Task<")) {
-                        return GetTask(item);
+                    if (typeName.StartsWith("System.Threading.Tasks.Task<")) {
+                        return GetTask(oi);
                     }
                     else {
-                        return new ThreadPoolItem() { Address = item, MethodName = itemType.Name };
+                        return new TaskInfo() { Address = oi.Address, MethodName = typeName };
                     }
             }
         }
@@ -173,12 +205,21 @@ namespace ClrSpy
         {
             (this.runtime, heap, domain) = (runtime, runtime.Heap, runtime.AppDomains[0]);
 
+            typeObject = heap.GetTypeByName("System.Object");
             typeDelegate = heap.GetTypeByName("System.Delegate");
             fieldDelegateTarget = typeDelegate.GetFieldByName("_target");
+
             typeTask = heap.GetTypeByName("System.Threading.Tasks.Task");
+            if (typeTask.BaseType.Name == "System.Threading.Tasks.Task")
+                typeTask = typeTask.BaseType;
             fieldTaskAction = typeTask.GetFieldByName("m_action");
             fieldTaskScheduler = typeTask.GetFieldByName("m_taskScheduler");
+            fieldTaskContinuationObject = typeTask.GetFieldByName("m_continuationObject");
+
             typeDelayPromise = heap.GetTypeByName("System.Threading.Tasks.Task+DelayPromise");
+            typeQueueUserWorkItemCallback = heap.GetTypeByName("System.Threading.QueueUserWorkItemCallback");
+            fieldCallback = typeQueueUserWorkItemCallback.GetFieldByName("callback");
+            typeWaitCallback = heap.GetTypeByName("System.Threading.WaitCallback");
         }
     }
 }

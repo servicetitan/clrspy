@@ -10,15 +10,14 @@ namespace ClrSpy
 {
     internal class CoreManagedWorkItem : ManagedWorkItem
     {
-        public CoreManagedWorkItem(ClrType type, ulong addr)
-        {
-            Type = type;
-            Object = addr;
-        }
-
         public override ulong Object { get; }
-
         public override ClrType Type { get; }
+
+        public CoreManagedWorkItem(ObjectInfo oi)
+        {
+            Object = oi.Address;
+            Type = oi.Type;
+        }
     }
 
     public class CoreThreadPool : ClrThreadPool
@@ -41,16 +40,8 @@ namespace ClrSpy
 
         public override IEnumerable<NativeWorkItem> EnumerateNativeWorkItems() => runtime.ThreadPool.EnumerateNativeWorkItems();
 
-        public override IEnumerable<ManagedWorkItem> EnumerateManagedWorkItems()
-        {
-            foreach (ulong obj in driver.EnumerateManagedWorkItems()) {
-                if (obj != 0) {
-                    ClrType type = heap.GetObjectType(obj);
-                    if (type != null)
-                        yield return new CoreManagedWorkItem(type, obj);
-                }
-            }
-        }
+        public override IEnumerable<ManagedWorkItem> EnumerateManagedWorkItems() =>
+            driver.EnumerateManagedWorkItems().Select(oi => new CoreManagedWorkItem(oi));
 
         public CoreThreadPool(ClrRuntime runtime) {
             (this.runtime, heap, domain) = (runtime, runtime.Heap, runtime.AppDomains[0]);

@@ -2,6 +2,7 @@ using System;
 using System.Text;
 using System.Threading;
 
+#nullable disable
 namespace ClrSpy
 {
     /// <summary>
